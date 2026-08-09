@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { GoogleGenAI, Type } from "@google/genai";
 import type { AstroConfig, Table, Column, ColumnType } from '../../types';
 import { DbAdapter } from '../../types';
 import { Bot, Plus, Trash2, X } from 'lucide-react';
+import { generateSchemaViaProxy } from '../../lib/schemaAi';
 
 interface StepProps {
     config: AstroConfig;
@@ -17,110 +17,19 @@ export const StepDataSchema: React.FC<StepProps> = ({ config, updateConfig }) =>
     const isEditorDisabled = config.db.adapter === DbAdapter.None;
 
     const handleGenerateWithAI = async () => {
-        if (!aiPrompt) return;
+        if (!aiPrompt.trim()) return;
         setIsLoading(true);
         setError(null);
 
         try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
-            const currentSchemaString = JSON.stringify(config.schema.tables, null, 2);
-
-            const prompt = `You are a database schema designer for a project using ${config.db.adapter}.
-The current schema is:
-\`\`\`json
-${currentSchemaString}
-\`\`\`
-The user wants to add the following functionality: "${aiPrompt}".
-
-Based on the user's request, update the schema. You can add new tables or add columns to existing tables.
-- DO NOT remove or alter existing columns on existing tables unless absolutely necessary.
-- Ensure all tables have an 'id' column as a primary key.
-- Use snake_case for table and column names.
-- For relationships, add a column like 'user_id' and also a 'relation' type column for the ORM.
-- Infer appropriate data types (string, text, number, boolean, date, json).
-
-Return ONLY the complete, updated schema as a single JSON object conforming to the following structure. Do not add any commentary before or after the JSON.
-The JSON must follow this exact structure:
-{
-  tables: [
-    {
-      id: "string", // a unique identifier
-      name: "string", // table name in snake_case
-      columns: [
-        {
-          id: "string", // a unique identifier
-          name: "string", // column name in snake_case
-          type: "string", // one of: id, string, text, number, boolean, date, json, relation
-          options: {
-            primaryKey: "boolean",
-            notNull: "boolean",
-            unique: "boolean",
-            default: "any",
-            relatedTo: "string" // name of the related table
-          }
-        }
-      ]
-    }
-  ]
-}
-`;
-
-            const response = await ai.models.generateContent({
-                model: "gemini-2.5-flash",
-                contents: prompt,
-                config: {
-                    responseMimeType: "application/json",
-                    responseSchema: {
-                        type: Type.OBJECT,
-                        properties: {
-                            tables: {
-                                type: Type.ARRAY,
-                                items: {
-                                    type: Type.OBJECT,
-                                    properties: {
-                                        id: { type: Type.STRING },
-                                        name: { type: Type.STRING },
-                                        columns: {
-                                            type: Type.ARRAY,
-                                            items: {
-                                                type: Type.OBJECT,
-                                                properties: {
-                                                    id: { type: Type.STRING },
-                                                    name: { type: Type.STRING },
-                                                    type: { type: Type.STRING },
-                                                    options: {
-                                                        type: Type.OBJECT,
-                                                        properties: {
-                                                            primaryKey: { type: Type.BOOLEAN, nullable: true },
-                                                            notNull: { type: Type.BOOLEAN, nullable: true },
-                                                            unique: { type: Type.BOOLEAN, nullable: true },
-                                                            default: { type: Type.STRING, nullable: true }, // Simplified for schema
-                                                            relatedTo: { type: Type.STRING, nullable: true },
-                                                        },
-                                                    },
-                                                },
-                                                required: ["id", "name", "type", "options"],
-                                            },
-                                        },
-                                    },
-                                    required: ["id", "name", "columns"],
-                                },
-                            },
-                        },
-                        required: ["tables"],
-                    },
-                },
-            });
-            
-            const newSchema = JSON.parse(response.text);
-            updateConfig(c => ({...c, schema: newSchema }));
-
+            const newSchema = await generateSchemaViaProxy(config, aiPrompt.trim());
+            updateConfig(c => ({ ...c, schema: newSchema }));
+            setAiPrompt("");
         } catch (e) {
             console.error(e);
-            setError("Failed to generate schema. Please check the console for details.");
+            setError("AI schema generation requires a configured backend proxy at /api/generate-schema. Manual schema editing remains available.");
         } finally {
             setIsLoading(false);
-            setAiPrompt("");
         }
     };
     
