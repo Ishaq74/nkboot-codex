@@ -1,24 +1,8 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import type { AstroConfig } from '../types';
-import { FileTab, StylingChoice, DbAdapter, AuthProvider, BetterAuthEmailProvider } from '../types';
 import { diffLines, type Change } from 'diff';
-import { getRequiredEnvVars } from '../lib/env';
-import {
-  getPackageJsonContent,
-  getAstroConfigContent,
-  getTailwindConfigContent,
-  getThemeCssContent,
-  getDrizzleSchemaContent,
-  getPrismaSchemaContent,
-  getAuthTsContent,
-  getMiddlewareTsContent,
-  getApiAuthRouteContent,
-  getAuthClientContent,
-  getEmailUtilContent,
-  getEnvDTsContent,
-  getEnvContent,
-} from '../lib/fileContentGenerators';
+import { getGeneratedProjectFiles } from '../lib/exportProject';
 
 // --- HOOK TO STORE PREVIOUS VALUE ---
 function usePrevious<T>(value: T): T | undefined {
@@ -36,45 +20,17 @@ interface CodeViewerProps {
 }
 
 export const CodeViewer: React.FC<CodeViewerProps> = ({ config }) => {
-  const [activeTab, setActiveTab] = useState<FileTab>(FileTab.PackageJson);
+  const [activeTab, setActiveTab] = useState('package.json');
   const prevConfig = usePrevious(config);
 
-  const getContentForTab = (tab: FileTab, cfg: AstroConfig): string => {
-    switch (tab) {
-        case FileTab.PackageJson: return getPackageJsonContent(cfg);
-        case FileTab.AstroConfig: return getAstroConfigContent(cfg);
-        case FileTab.TailwindConfig: return cfg.styling === StylingChoice.Tailwind ? getTailwindConfigContent(cfg) : '';
-        case FileTab.ThemeCss: return getThemeCssContent(cfg);
-        case FileTab.DrizzleSchema: return cfg.db.adapter === DbAdapter.Drizzle ? getDrizzleSchemaContent(cfg) : '';
-        case FileTab.PrismaSchema: return cfg.db.adapter === DbAdapter.Prisma ? getPrismaSchemaContent(cfg) : '';
-        case FileTab.AuthTs: return cfg.auth.provider === AuthProvider.BetterAuth ? getAuthTsContent(cfg) : '';
-        case FileTab.MiddlewareTs: return cfg.auth.provider === AuthProvider.BetterAuth ? getMiddlewareTsContent() : '';
-        case FileTab.ApiAuthRoute: return cfg.auth.provider === AuthProvider.BetterAuth ? getApiAuthRouteContent() : '';
-        case FileTab.AuthClient: return cfg.auth.provider === AuthProvider.BetterAuth ? getAuthClientContent(cfg) : '';
-        case FileTab.EmailUtil: return cfg.auth.provider === AuthProvider.BetterAuth && cfg.auth.betterAuth.emailProvider !== BetterAuthEmailProvider.None ? getEmailUtilContent(cfg) : '';
-        case FileTab.EnvDTs: return cfg.auth.provider === AuthProvider.BetterAuth ? getEnvDTsContent() : '';
-        case FileTab.Env: return getEnvContent(cfg);
-        default: return '';
-    }
+  const generatedFiles = useMemo(() => getGeneratedProjectFiles(config), [config]);
+  const prevGeneratedFiles = useMemo(() => prevConfig ? getGeneratedProjectFiles(prevConfig) : undefined, [prevConfig]);
+
+  const getContentForTab = (tab: string, files = generatedFiles): string => {
+    return files.find((file) => file.path === tab)?.content ?? '';
   };
   
-  const tabs = useMemo(() => {
-      const availableTabs = [FileTab.PackageJson, FileTab.AstroConfig];
-      if (config.styling === StylingChoice.Tailwind) availableTabs.push(FileTab.TailwindConfig);
-      availableTabs.push(FileTab.ThemeCss);
-      if (config.db.adapter === DbAdapter.Drizzle) availableTabs.push(FileTab.DrizzleSchema);
-      if (config.db.adapter === DbAdapter.Prisma) availableTabs.push(FileTab.PrismaSchema);
-      if (config.auth.provider === AuthProvider.BetterAuth) {
-          availableTabs.push(FileTab.AuthTs, FileTab.MiddlewareTs, FileTab.ApiAuthRoute, FileTab.AuthClient, FileTab.EnvDTs);
-          if (config.auth.betterAuth.emailProvider !== BetterAuthEmailProvider.None) {
-              availableTabs.push(FileTab.EmailUtil);
-          }
-      }
-      if (getRequiredEnvVars(config).length > 0) {
-          availableTabs.push(FileTab.Env);
-      }
-      return availableTabs;
-  }, [config]);
+  const tabs = useMemo(() => generatedFiles.map((file) => file.path), [generatedFiles]);
 
   useEffect(() => {
     // If the active tab is no longer available, switch to the first one.
@@ -84,14 +40,14 @@ export const CodeViewer: React.FC<CodeViewerProps> = ({ config }) => {
   }, [tabs, activeTab]);
 
   const diffs = useMemo<Change[]>(() => {
-    const newContent = getContentForTab(activeTab, config);
+    const newContent = getContentForTab(activeTab);
     // On first load, treat the entire file as an addition
     if (!prevConfig) {
       return [{ value: newContent, added: true, removed: false, count: newContent.split('\n').length }];
     }
-    const oldContent = getContentForTab(activeTab, prevConfig);
+    const oldContent = getContentForTab(activeTab, prevGeneratedFiles);
     return diffLines(oldContent, newContent);
-  }, [activeTab, config, prevConfig]);
+  }, [activeTab, prevConfig, generatedFiles, prevGeneratedFiles]);
 
 
   return (

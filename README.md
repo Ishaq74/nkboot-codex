@@ -68,7 +68,7 @@ Pour utiliser les fonctionnalités boostées à l'IA (génération de schémas, 
 GEMINI_API_KEY="AIzaSyYourSecretKeyHere..."
 ```
 
-⚠️ **ATTENTION (Dette Technique actuelle) :** Dans la version actuelle, cette clé est exposée au frontend via `vite.config.ts`. Cela est acceptable **uniquement en développement local**. Pour la production, cette architecture doit basculer sur un proxy backend (voir section [Audit](#7--laudit-définitif--failles--bottlenecks)).
+✅ **État actuel :** la clé Gemini n’est plus injectée dans le bundle frontend. La génération IA appelle désormais un proxy backend sécurisé attendu sur `/api/generate-schema`; aucune clé n’est injectée dans le frontend.
 
 ---
 
@@ -116,7 +116,7 @@ graph TD
 /
 ├── App.tsx                    # 🧠 CŒUR : Contient le State global (config) et le Layout Split-Screen
 ├── types.ts                   # 🗄️ CONTRAT : Toutes les interfaces (AstroConfig) et Enums (Template, DbProvider)
-├── index.html                 # 🌐 ENTRY : Contient le CDN Tailwind et l'import map
+├── index.html                 # 🌐 ENTRY : Point de montage Vite sans CDN/import map
 ├── vite.config.ts             # ⚙️ BUNDLER : Config Vite, alias `@/`, et variables d'env
 │
 ├── /components/               # 🧩 INTERFACES UTILISATEUR
@@ -138,41 +138,41 @@ graph TD
 
 | Couche | Technologie | Justification |
 | :--- | :--- | :--- |
-| **View / UI** | `React ^19.2` | Rendu déclaratif, préparation pour hooks concurrents. |
+| **View / UI** | `React ^18.3` | Rendu déclaratif stable et compatible avec les dépendances UI actuelles. |
 | **Language** | `TypeScript` | Sécurité absolue lors de la génération dynamique de code. |
 | **Bundler** | `Vite ^6.2` | HMR ultra-rapide, build optimisé. |
-| **Styling** | `Tailwind CSS` | Actuellement via CDN (problématique, voir Audit). |
+| **Styling** | `Tailwind CSS` | Intégration native via PostCSS/Tailwind CLI dans le build Vite. |
 | **Icons** | `lucide-react` | Icônes SVG scalables et minimalistes. |
-| **AI / LLM** | `@google/genai` | SDK Gemini pour la future génération de schémas complexes. |
+| **AI / LLM** | Backend proxy à prévoir | Le frontend appelle `/api/generate-schema` sans jamais embarquer de clé Gemini. |
 
 ---
 
 ## 7. 🚨 L'Audit Définitif : Failles & Bottlenecks
 
-### 🛑 Sécurité : Fuite de Clé API Gemini
-- **Le Problème :** `vite.config.ts` injecte `GEMINI_API_KEY` dans le bundle client via `define`. N'importe quel visiteur peut voler la clé.
-- **Le Fix :** Supprimer cette injection. Créer un backend (ex: Express ou Hono) pour servir d'intermédiaire sécurisé `/api/generate`.
+### ✅ Sécurité : Fuite de Clé API Gemini corrigée côté frontend
+- **État :** `vite.config.ts` n’injecte plus `GEMINI_API_KEY` dans le bundle client.
+- **Suite :** implémenter le backend (ex: Express ou Hono) derrière `/api/generate-schema` pour connecter Gemini côté serveur uniquement.
 
 ### 📉 Performance : Re-renders globaux
 - **Le Problème :** Le `useState` massif dans `App.tsx` re-rend tout le DOM (y compris les visualiseurs de code complexes) à chaque frappe de clavier.
 - **Le Fix :** Implémenter **Zustand** avec des sélecteurs d'état. Ajouter un *Debounce* sur les inputs textuels.
 
-### 🏗️ Dette Technique : Tailwind via CDN
-- **Le Problème :** Le tag `<script>` Tailwind dans `index.html` est conçu pour le prototypage, pas pour la production (FOUC, lenteur, pas de minification).
-- **Le Fix :** Installer Tailwind nativement via `postcss`.
+### ✅ Build : Tailwind natif
+- **État :** Tailwind est configuré via `tailwind.config.ts`, `postcss.config.js` et `index.css`.
+- **Suite :** enrichir les tokens/design-system si l’interface évolue.
 
-### 💾 Expérience Utilisateur : Zéro Persistance & Zéro Export
-- **Le Problème :** Un F5 efface tout. Impossible de télécharger le projet généré.
-- **Le Fix :** Synchroniser l'état avec le `localStorage`. Intégrer `JSZip` pour générer et télécharger l'archive du projet.
+### ✅ Expérience Utilisateur : Persistance & export ZIP
+- **État :** la configuration est sauvegardée dans le `localStorage`, un reset confirmé est disponible, et l’utilisateur peut télécharger une archive ZIP plus complète du projet généré.
+- **Suite :** ajouter import/export JSON de configuration et validation de schéma.
 
 ---
 
 ## 8. 🗺️ Roadmap Architecturale (V1 -> V2)
 
-1. **Sprint 1 (SecOps & Build) :** Retrait API Key du front, intégration Tailwind native.
-2. **Sprint 2 (State & UX) :** Migration vers Zustand, sauvegarde LocalStorage.
-3. **Sprint 3 (Features Core) :** Implémentation de `JSZip` -> Bouton **"Télécharger le Projet"**.
-4. **Sprint 4 (Qualité) :** Ajout de `Zod` (Validation de formulaires) et `Vitest` (Tests unitaires des générateurs de code).
+1. **Sprint 1 (SecOps & Build) :** ✅ Retrait API Key du front, intégration Tailwind native.
+2. **Sprint 2 (State & UX) :** ✅ Sauvegarde LocalStorage ; migration Zustand encore à faire si les performances le justifient.
+3. **Sprint 3 (Features Core) :** ✅ Export ZIP déterministe du projet généré avec bouton **"Télécharger le Projet"**, `nkboot.config.json`, page Astro de démarrage et reset confirmé de configuration.
+4. **Sprint 4 (Qualité) :** ✅ Base Vitest/typecheck ajoutée ; validation Zod encore à faire.
 
 ---
 
