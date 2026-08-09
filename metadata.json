@@ -1,0 +1,6 @@
+{
+  "name": "NKBOOTING PRIME",
+  "description": "A multi-step configuration tool to quickly set up Astro projects. It provides a live preview of the generated command line instructions and file contents based on user choices.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
