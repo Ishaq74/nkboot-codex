@@ -166,7 +166,7 @@ export const getThemeCssContent = (config: AstroConfig) => {
         content += `@media (prefers-color-scheme: dark) {\n  :root {\n${generateVariables('dark')}\n  }\n}\n`;
     }
     if (config.styling !== StylingChoice.Tailwind) {
-        content += `\nbody {\n  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;\n  background-color: var(--color-bg);\n  color: var(--color-text);\n  line-height: 1.5;\n}\n\nh1, h2, h3 {\n  color: var(--color-primary);\n}\n`;
+        content += `\nbody {\n  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;\n  background-color: var(--background);\n  color: var(--foreground);\n  line-height: 1.5;\n}\n\nh1, h2, h3 {\n  color: var(--primary);\n}\n`;
     }
     return content;
 };

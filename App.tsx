@@ -1,5 +1,5 @@
 
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Header } from './components/Header';
 import { MultiStepForm } from './components/MultiStepForm';
 import { CliVisualizer } from './components/CliVisualizer';
@@ -8,12 +8,14 @@ import type { AstroConfig } from './types';
 import { Template, TypeScriptLevel, PackageManager, StylingChoice, ComponentLibrary, ThemeMode, DbProvider, DbAdapter, AuthProvider, BetterAuthEmailProvider } from './types';
 import { initialTheme } from './lib/theme';
 import { getInitialSchema } from './lib/schema';
+import { extractStoredConfig, sanitizeAstroConfig } from './lib/configValidation';
+
+const STORAGE_KEY = 'nkbooting-prime-config';
+const STORAGE_VERSION = 1;
 
 
-const App: React.FC = () => {
-  const [currentStep, setCurrentStep] = useState(0);
-  
-  const [config, setConfig] = useState<AstroConfig>(() => {
+const createInitialConfig = (): AstroConfig => {
+
     const initialBaseConfig: Omit<AstroConfig, 'schema'> = {
         projectName: 'my-astro-site',
         template: Template.Minimal,
@@ -52,7 +54,51 @@ const App: React.FC = () => {
         ...initialBaseConfig,
         schema: getInitialSchema(initialBaseConfig),
     };
-  });
+};
+
+const mergeStoredConfig = (storedConfig: unknown): AstroConfig => {
+  return sanitizeAstroConfig(storedConfig, createInitialConfig());
+};
+
+const loadInitialConfig = (): AstroConfig => {
+  if (typeof window === 'undefined') return createInitialConfig();
+
+  try {
+    const savedConfig = window.localStorage.getItem(STORAGE_KEY);
+    if (!savedConfig) return createInitialConfig();
+
+    const parsedConfig = JSON.parse(savedConfig) as unknown;
+    return mergeStoredConfig(extractStoredConfig(parsedConfig));
+  } catch (error) {
+    console.warn('Unable to restore saved NKBOOTING PRIME config.', error);
+    return createInitialConfig();
+  }
+};
+
+const App: React.FC = () => {
+  const [currentStep, setCurrentStep] = useState(0);
+  const [config, setConfig] = useState<AstroConfig>(loadInitialConfig);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: STORAGE_VERSION, config }));
+    } catch (error) {
+      console.warn('Unable to persist NKBOOTING PRIME config.', error);
+    }
+  }, [config]);
+
+  const resetConfig = useCallback(() => {
+    const shouldReset = window.confirm('Réinitialiser toute la configuration du wizard ?');
+    if (!shouldReset) return;
+
+    setConfig(createInitialConfig());
+    setCurrentStep(0);
+  }, []);
+
+  const importConfig = useCallback((rawConfig: unknown) => {
+    setConfig(mergeStoredConfig(extractStoredConfig(rawConfig)));
+    setCurrentStep(0);
+  }, []);
 
   const updateConfig = useCallback((newConfig: Partial<AstroConfig> | ((c: AstroConfig) => AstroConfig)) => {
     setConfig(prev => {
@@ -71,7 +117,7 @@ const App: React.FC = () => {
 
   return (
     <div className="flex flex-col min-h-screen font-sans bg-raisin-black">
-      <Header />
+      <Header config={config} onReset={resetConfig} onImportConfig={importConfig} />
       <main className="flex-grow p-4 md:p-6 lg:p-8 grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 lg:gap-8 overflow-auto">
         {/* Left Column */}
         <div className="bg-jet rounded-lg shadow-lg p-4 md:p-6 overflow-auto">
